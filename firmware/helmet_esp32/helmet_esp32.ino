@@ -1,11 +1,8 @@
 // ============================================================
-//  SMART MINING HELMET (ESP32) — UPDATED
+//  SMART MINING HELMET (ESP32) 
 //  ✔ 1 second live updates to /live/W-01
-//  ✔ Telemetry history with pushJSON()
 //  ✔ Keep ONLY last 100 telemetry records (auto delete oldest)
 //  ✔ Optional telemetry push every 15 sec
-//  ✔ SOS edge-detected to /SOS/W-01
-//  NOTE: Uses setDouble() for timestamps (your Firebase lib supports it)
 // ============================================================
 
 // ================= WiFi =================
