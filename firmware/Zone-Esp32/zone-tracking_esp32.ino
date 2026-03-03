@@ -221,10 +221,22 @@ void setup() {
     lcdLine(0, "WiFi OK");
     configTime(GMT_OFFSET, 0, NTP_SERVER);
 
-    // Wait a bit for NTP
+    // Wait for NTP sync — up to 20 seconds (critical for correct timestamps)
+    lcdLine(0, "NTP syncing...");
     time_t nowT = time(nullptr);
     int ttry = 0;
-    while (nowT < 100000 && ttry++ < 20) { delay(300); nowT = time(nullptr); }
+    while (nowT < 1577836800L && ttry++ < 40) { // 1577836800 = Jan 1 2020
+      delay(500);
+      nowT = time(nullptr);
+      Serial.print(".");
+    }
+    if (nowT >= 1577836800L) {
+      Serial.println("\nNTP OK: epoch=" + String((long)nowT));
+      lcdLine(0, "NTP OK");
+    } else {
+      Serial.println("\nNTP FAILED — timestamps will be wrong!");
+      lcdLine(0, "NTP FAIL");
+    }
   } else {
     Serial.println("\nWiFi FAILED — offline mode");
     lcdLine(0, "WiFi FAIL");

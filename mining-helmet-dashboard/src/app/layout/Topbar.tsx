@@ -11,6 +11,11 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import CellTowerIcon from '@mui/icons-material/CellTower';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import { useSosListener } from '../../controllers/useSosListener';
+import { useHelmetAssignment } from '../../controllers/useHelmetAssignment';
+import { useWorkers } from '../../controllers/useWorkers';
+import { createIncident } from '../../services/incidents.service';
+import { set, ref } from 'firebase/database';
+import { rtdb } from '../../services/firebase/rtdb';
 
 // Colombo = UTC+5:30
 const getColomboTime = () => {
@@ -66,12 +71,38 @@ export const Topbar: React.FC<TopbarProps> = ({ onMobileMenuOpen, isMobile, draw
     }, []);
 
     // ── Manual SOS dialog ────────────────────────────────────
+    const { assignedWorkerId } = useHelmetAssignment();
+    const { workers } = useWorkers();
+    const assignedWorker = workers.find(w => w.id === assignedWorkerId);
+
     const [manualSosOpen, setManualSosOpen] = useState(false);
     const [manualCountdown, setManualCountdown] = useState(SOS_DISPLAY_SECONDS);
+    const [sosSaving, setSosSaving] = useState(false);
 
     const openManualSos = () => {
         setManualCountdown(SOS_DISPLAY_SECONDS);
         setManualSosOpen(true);
+    };
+
+    const handleConfirmSos = async () => {
+        setSosSaving(true);
+        const zone = assignedWorker?.currentZone ?? 'Unknown Zone';
+        const workerName = assignedWorker?.name ?? assignedWorkerId;
+        const ts = Date.now();
+        // Save SOS incident
+        await createIncident({
+            workerId: assignedWorkerId,
+            workerName,
+            type: 'SOS',
+            zone,
+            time: ts,
+            status: 'active',
+            message: 'Manual SOS triggered from admin dashboard',
+        });
+        // Force DANGER on assigned worker
+        set(ref(rtdb, `Workers/${assignedWorkerId}/riskLevel`), 'DANGER').catch(() => { });
+        setSosSaving(false);
+        setManualSosOpen(false);
     };
 
     const closeManualSos = () => {
@@ -284,10 +315,12 @@ export const Topbar: React.FC<TopbarProps> = ({ onMobileMenuOpen, isMobile, draw
             <SosDialog
                 open={manualSosOpen}
                 onClose={closeManualSos}
+                onConfirm={handleConfirmSos}
+                saving={sosSaving}
                 title="🚨 SOS Emergency Alert"
-                workerName="Admin Dashboard"
+                workerName={assignedWorker?.name ?? 'Admin Dashboard'}
                 timestamp={new Date().toLocaleTimeString()}
-                autoClose
+                autoClose={false}
                 countdown={manualCountdown}
                 progress={((SOS_DISPLAY_SECONDS - manualCountdown) / SOS_DISPLAY_SECONDS) * 100}
             />
@@ -311,6 +344,8 @@ export const Topbar: React.FC<TopbarProps> = ({ onMobileMenuOpen, isMobile, draw
 interface SosDialogProps {
     open: boolean;
     onClose: () => void;
+    onConfirm?: () => void;
+    saving?: boolean;
     title: string;
     workerName: string;
     timestamp: string;
@@ -320,7 +355,7 @@ interface SosDialogProps {
 }
 
 const SosDialog: React.FC<SosDialogProps> = ({
-    open, onClose, title, workerName, timestamp, autoClose, countdown, progress,
+    open, onClose, onConfirm, saving, title, workerName, timestamp, autoClose, countdown, progress,
 }) => (
     <Dialog
         open={open}
@@ -391,17 +426,31 @@ const SosDialog: React.FC<SosDialogProps> = ({
 
         <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
             <Button onClick={onClose} variant="outlined" color="inherit" sx={{ borderRadius: 2 }}>
-                Dismiss
+                Cancel
             </Button>
-            <Button
-                onClick={onClose}
-                variant="contained"
-                color="error"
-                startIcon={<WarningAmberIcon />}
-                sx={{ borderRadius: 2, fontWeight: 700 }}
-            >
-                Acknowledge &amp; Close{autoClose && countdown !== null ? ` (${countdown}s)` : ''}
-            </Button>
+            {onConfirm && (
+                <Button
+                    onClick={onConfirm}
+                    variant="contained"
+                    color="error"
+                    startIcon={<WarningAmberIcon />}
+                    disabled={saving}
+                    sx={{ borderRadius: 2, fontWeight: 700 }}
+                >
+                    {saving ? 'Saving…' : `Confirm SOS${autoClose && countdown !== null ? ` (${countdown}s)` : ''}`}
+                </Button>
+            )}
+            {!onConfirm && (
+                <Button
+                    onClick={onClose}
+                    variant="contained"
+                    color="error"
+                    startIcon={<WarningAmberIcon />}
+                    sx={{ borderRadius: 2, fontWeight: 700 }}
+                >
+                    Acknowledge &amp; Close{autoClose && countdown !== null ? ` (${countdown}s)` : ''}
+                </Button>
+            )}
         </DialogActions>
     </Dialog>
 );

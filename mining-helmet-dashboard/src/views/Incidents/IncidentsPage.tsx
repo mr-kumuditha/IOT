@@ -3,13 +3,14 @@ import {
     Box, Typography, Card, Table, TableBody, TableCell, TableContainer,
     TableHead, TableRow, TextField, MenuItem, InputAdornment, Button,
     Chip, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions,
-    Avatar, Tooltip,
+    Avatar, Tooltip, IconButton,
 } from '@mui/material';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import DangerousIcon from '@mui/icons-material/Dangerous';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import DeleteIcon from '@mui/icons-material/Delete';
 import { useIncidents } from '../../controllers/useIncidents';
-import { updateIncidentStatus } from '../../services/incidents.service';
+import { updateIncidentStatus, deleteIncident } from '../../services/incidents.service';
 import { LoadingState } from '../../components/LoadingState';
 import { EmptyState } from '../../components/EmptyState';
 import type { Incident, IncidentType } from '../../models/incident';
@@ -55,6 +56,8 @@ export const IncidentsPage: React.FC = () => {
     const [statusFilter, setStatusFilter] = useState<string>('ALL');
     const [resolveTarget, setResolveTarget] = useState<Incident | null>(null);
     const [resolving, setResolving] = useState(false);
+    const [deleteTarget, setDeleteTarget] = useState<Incident | null>(null);
+    const [deleting, setDeleting] = useState(false);
 
     if (loading) return <LoadingState />;
 
@@ -73,6 +76,14 @@ export const IncidentsPage: React.FC = () => {
         await updateIncidentStatus(resolveTarget.id, 'resolved');
         setResolving(false);
         setResolveTarget(null);
+    };
+
+    const handleDelete = async () => {
+        if (!deleteTarget) return;
+        setDeleting(true);
+        await deleteIncident(deleteTarget.id);
+        setDeleting(false);
+        setDeleteTarget(null);
     };
 
     return (
@@ -227,17 +238,29 @@ export const IncidentsPage: React.FC = () => {
 
                                             {/* Actions */}
                                             <TableCell align="right">
-                                                {incident.status === 'active' && (
-                                                    <Tooltip title="Mark as resolved">
-                                                        <Button
-                                                            size="small" variant="outlined" color="success"
-                                                            startIcon={<CheckCircleIcon />}
-                                                            onClick={() => setResolveTarget(incident)}
-                                                        >
-                                                            Resolve
-                                                        </Button>
-                                                    </Tooltip>
-                                                )}
+                                                <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
+                                                    {incident.status === 'active' && (
+                                                        <Tooltip title="Mark as resolved">
+                                                            <Button
+                                                                size="small" variant="outlined" color="success"
+                                                                startIcon={<CheckCircleIcon />}
+                                                                onClick={() => setResolveTarget(incident)}
+                                                            >
+                                                                Resolve
+                                                            </Button>
+                                                        </Tooltip>
+                                                    )}
+                                                    {incident.status === 'resolved' && (
+                                                        <Tooltip title="Delete this incident from database">
+                                                            <IconButton
+                                                                size="small" color="error"
+                                                                onClick={() => setDeleteTarget(incident)}
+                                                            >
+                                                                <DeleteIcon fontSize="small" />
+                                                            </IconButton>
+                                                        </Tooltip>
+                                                    )}
+                                                </Box>
                                             </TableCell>
                                         </TableRow>
                                     );
@@ -264,6 +287,26 @@ export const IncidentsPage: React.FC = () => {
                     <Button onClick={() => setResolveTarget(null)}>Cancel</Button>
                     <Button onClick={handleResolve} color="success" variant="contained" disabled={resolving}>
                         {resolving ? 'Resolving…' : 'Confirm Resolved'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* ── Delete confirm dialog ── */}
+            <Dialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)}>
+                <DialogTitle>Delete Incident?</DialogTitle>
+                <DialogContent>
+                    <DialogContentText>
+                        Permanently delete the <strong>{deleteTarget && INCIDENT_CONFIG[deleteTarget.type]?.label}</strong> incident
+                        for <strong>{deleteTarget?.workerName || deleteTarget?.workerId}</strong>?
+                        <br /><br />
+                        This <strong>cannot be undone</strong> and will be removed from the database.
+                    </DialogContentText>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setDeleteTarget(null)}>Cancel</Button>
+                    <Button onClick={handleDelete} color="error" variant="contained" disabled={deleting}
+                        startIcon={<DeleteIcon />}>
+                        {deleting ? 'Deleting…' : 'Delete Permanently'}
                     </Button>
                 </DialogActions>
             </Dialog>
