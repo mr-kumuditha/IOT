@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-    Card, CardContent, CardHeader, Divider, Box, Typography, Chip,
+    Card, CardContent, Box, Typography, Chip,
     LinearProgress, useTheme,
 } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -69,11 +69,6 @@ export const SensorCard: React.FC<SensorCardProps> = ({
         level === 'DANGER' ? theme.palette.error.main :
             level === 'WARNING' ? theme.palette.warning.main :
                 theme.palette.info.main;
-
-    const borderColor =
-        level === 'DANGER' ? theme.palette.error.main :
-            level === 'WARNING' ? theme.palette.warning.main :
-                theme.palette.divider;
 
     const meta = levelMeta(level);
 

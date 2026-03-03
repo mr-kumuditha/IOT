@@ -1,5 +1,4 @@
 import { set, ref } from "firebase/database";
-import { telemetryRef } from "./firebase/refs";
 import type { TelemetryPoint } from "../models/telemetry";
 import { rtdb } from "./firebase/rtdb";
 
