@@ -3,6 +3,7 @@ import { Box, CssBaseline, useTheme, useMediaQuery } from '@mui/material';
 import { Outlet } from 'react-router-dom';
 import { Topbar } from './Topbar';
 import { Sidebar } from './Sidebar';
+import { useRiskPropagation } from '../../controllers/useRiskPropagation';
 
 export const DRAWER_WIDTH = 260;
 
@@ -10,6 +11,9 @@ export const DashboardLayout: React.FC = () => {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
     const [mobileOpen, setMobileOpen] = useState(false);
+
+    // ── Background service: propagates helmet risk → assigned worker ──
+    useRiskPropagation();
 
     const handleDrawerToggle = () => {
         setMobileOpen(!mobileOpen);

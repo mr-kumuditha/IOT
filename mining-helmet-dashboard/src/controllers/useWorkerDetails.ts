@@ -12,7 +12,7 @@ export const useWorkerDetails = (workerId: string) => {
     useEffect(() => {
         if (!workerId) return;
 
-        // Listen to worker details
+        // Listen to worker profile
         const wRef = workerRef(workerId);
         const unsubWorker = onValue(wRef, (snapshot) => {
             if (snapshot.exists()) {
@@ -23,13 +23,19 @@ export const useWorkerDetails = (workerId: string) => {
             setLoading(false);
         });
 
-        // Listen to latest zone history
+        // Listen to latest 20 zone history events
         const zRef = query(zonesHistoryRef(workerId), limitToLast(20));
         const unsubZones = onValue(zRef, (snapshot) => {
             if (snapshot.exists()) {
                 const data = snapshot.val();
-                const history: ZoneHistoryEvent[] = Object.keys(data).map(key => data[key]);
-                history.sort((a, b) => b.time - a.time); // newest first
+                const history: ZoneHistoryEvent[] = Object.keys(data).map(key => ({
+                    ...data[key],
+                    // Normalise: firmware uses "ts", legacy may use "time"
+                    ts: data[key].ts ?? data[key].time ?? 0,
+                    zone: data[key].zone ?? data[key].zoneName ?? '',
+                }));
+                // Newest first
+                history.sort((a, b) => (b.ts ?? 0) - (a.ts ?? 0));
                 setZoneHistory(history);
             } else {
                 setZoneHistory([]);
