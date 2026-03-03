@@ -28,6 +28,10 @@ export const MonitorPage: React.FC = () => {
 
     const effectiveId = useMemo(() => {
         if (selectedWorkerId) return selectedWorkerId;
+        // Prefer W-01 (the real helmet firmware WORKER_ID) if it exists
+        const realHelmet = workers.find(w => w.id === 'W-01');
+        if (realHelmet) return 'W-01';
+        // Only fall back to first worker if W-01 not in Firebase yet
         return workers[0]?.id ?? '';
     }, [selectedWorkerId, workers]);
 
