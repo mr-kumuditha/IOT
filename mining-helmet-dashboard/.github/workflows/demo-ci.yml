@@ -1,0 +1,21 @@
+name: Demo CI
+
+on:
+  push:
+    branches: [ "demo" ]
+  pull_request:
+    branches: [ "demo" ]
+
+jobs:
+  lint-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Basic repo checks
+        run: |
+          test -f README.md
+          test -d docs
+          test -d dashboard/public
+          echo "Repo structure looks good"
+          

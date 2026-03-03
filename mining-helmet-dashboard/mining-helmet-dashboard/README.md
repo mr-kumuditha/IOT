@@ -1,17 +1,3 @@
-<<<<<<< HEAD
-# IoT-Based Mining Worker Safety Helmet
-
-## Demo Branch
-
-This branch contains temporary demonstration code and UI mockups.
-
-Features (Demo):
-- sensor simulation
-- Dashboard preview
-- System architecture draft
-
-Final hardware integration coming soon.
-=======
 # ⛏️ Mining Worker Safety Helmet — IoT Dashboard
 
 A modern, premium React dashboard for real-time monitoring of mining site workers using RFID zone tracking, SOS detection, and environmental sensor data.
@@ -226,4 +212,3 @@ Firebase.RTDB.setJSON(&fbdo, path.c_str(), &json);
 - [Firebase RTDB `onValue` Reference](https://firebase.google.com/docs/database/web/read-and-write#listen_for_value_events)
 - [MUI Material v7 Components](https://mui.com/material-ui/all-components/)
 - [MUI X Charts v8 LineChart](https://mui.com/x/react-charts/lines/)
->>>>>>> eacbc48 (local project setup)
