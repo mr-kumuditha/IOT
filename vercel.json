@@ -1,6 +1,0 @@
-{
-    "buildCommand": "cd mining-helmet-dashboard && npm install && npm run build",
-    "outputDirectory": "mining-helmet-dashboard/dist",
-    "installCommand": "cd mining-helmet-dashboard && npm install",
-    "framework": "vite"
-}
