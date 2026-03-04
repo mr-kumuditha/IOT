@@ -1,98 +1,111 @@
 // ============================================================
-//  ZONE TRACKING ESP32 — Two RFID Readers + WiFi + Firebase RTDB
-//  Zone A: SS=5  RST=4   | Zone B: SS=17 RST=16
-//
-//  Writes:
-//    /Workers/{workerId}/currentZone
-//    /Workers/{workerId}/name
-//    /Workers/{workerId}/id
-//    /Workers/{workerId}/role
-//    /Workers/{workerId}/lastUpdate          (NTP epoch ms, fallback millis)
-//
-//    /ZonesHistory/{workerId}/{pushId}
-//      - zone, uid, workerId, workerName, ts
-//
-//  Fixes included:
-//   - LCD begin(args) compatible with your LiquidCrystal_I2C library
-//   - Uses leading "/" in RTDB paths
-//   - Does NOT overwrite riskLevel (helmet node owns that)
-//   - Adds lastUpdate
-//   - Debounce to prevent repeated scans spamming Firebase
+//  ZONE TRACKING ESP32 — Two RFID Readers + WiFi + Firebase
+//  Timezone: Sri Lanka (UTC+5:30)
 // ============================================================
 
-// ──── WiFi ────────────────────────────────────────────────────
-#define WIFI_SSID        "SLT-4G_THARINDA"
-#define WIFI_PASSWORD    "Kumuditha@123"
 
-// ──── Firebase ────────────────────────────────────────────────
-#define FIREBASE_API_KEY      "AIzaSyCSt1mxgNcs8WciD_imKP3jKKqg8YoWgWI"
-#define FIREBASE_DATABASE_URL "https://iot-based-mining-helmet-default-rtdb.asia-southeast1.firebasedatabase.app"
+// ─────────────────────────────────────────────────────────────
+//                      WIFI SETTINGS
+// ─────────────────────────────────────────────────────────────
+#define WIFI_SSID        "SLT-4G_THARINDA"      // Your WiFi name
+#define WIFI_PASSWORD    "Kumuditha@123"        // Your WiFi password
+
+
+// ─────────────────────────────────────────────────────────────
+//                      FIREBASE SETTINGS
+// ─────────────────────────────────────────────────────────────
+#define FIREBASE_API_KEY      "YOUR_API_KEY"
+#define FIREBASE_DATABASE_URL "YOUR_DATABASE_URL"
 #define FIREBASE_USER_EMAIL    "helmet@mining.local"
 #define FIREBASE_USER_PASSWORD "helmet2025"
 
-// ──── UID → Worker mapping ────────────────────────────────────
-// UIDs printed as uppercase XX:XX:XX:XX — exact match required.
-struct CardMapping {
-  const char* uid;
-  const char* workerId;
-  const char* workerName;
-  const char* role;
-};
 
-const CardMapping CARDS[] = {
-  // RFID Tag
-  { "51:2D:A9:02", "W-01", "Kumuditha",  "Site Supervisor"   },
-  // RFID Cards 1-7
-  { "BA:9B:61:16", "W-02", "Worker 02",  "Driller"           },
-  { "FA:E6:6A:16", "W-03", "Worker 03",  "Blasting Engineer" },
-  { "AA:5C:62:16", "W-04", "Worker 04",  "Surveyor"          },
-  { "73:10:0F:05", "W-05", "Worker 05",  "Machine Operator"  },
-  { "2A:12:65:16", "W-06", "Worker 06",  "Ground Support"    },
-  { "0A:D3:61:16", "W-07", "Worker 07",  "Ventilation Tech"  },
-  { "AA:23:6C:05", "W-08", "Worker 08",  "Safety Officer"    },
-};
-const int CARD_COUNT = sizeof(CARDS) / sizeof(CARDS[0]);
+// ─────────────────────────────────────────────────────────────
+//                      LIBRARIES
+// ─────────────────────────────────────────────────────────────
+#include <SPI.h>                  // SPI communication for RFID
+#include <MFRC522.h>              // RFID library
+#include <Wire.h>                 // I2C communication (LCD)
+#include <LiquidCrystal_I2C.h>    // I2C LCD library
+#include <WiFi.h>                 // WiFi for ESP32
+#include <time.h>                 // NTP time functions
 
-// ──── Includes ────────────────────────────────────────────────
-#include <SPI.h>
-#include <MFRC522.h>
-#include <Wire.h>
-#include <LiquidCrystal_I2C.h>
-#include <WiFi.h>
-#include <time.h>
-
-#include <Firebase_ESP_Client.h>
+#include <Firebase_ESP_Client.h>  // Firebase library
 #include "addons/TokenHelper.h"
 #include "addons/RTDBHelper.h"
 
-// ──── Hardware ────────────────────────────────────────────────
-LiquidCrystal_I2C lcd(0x27, 16, 2);
 
-// RFID wiring
-#define SS_A   5
-#define RST_A  4
-#define SS_B   17
-#define RST_B  16
+// ─────────────────────────────────────────────────────────────
+//                      LCD SETUP
+// ─────────────────────────────────────────────────────────────
+LiquidCrystal_I2C lcd(0x27, 16, 2);   // LCD address 0x27, size 16x2
 
-MFRC522 rfidA(SS_A, RST_A);
-MFRC522 rfidB(SS_B, RST_B);
 
-// ──── Firebase objects ────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+//                      RFID PINS
+// ─────────────────────────────────────────────────────────────
+#define SS_A   5     // Zone A SS pin
+#define RST_A  4     // Zone A RST pin
+#define SS_B   17    // Zone B SS pin
+#define RST_B  16    // Zone B RST pin
+
+MFRC522 rfidA(SS_A, RST_A);   // RFID reader for Zone A
+MFRC522 rfidB(SS_B, RST_B);   // RFID reader for Zone B
+
+
+// ─────────────────────────────────────────────────────────────
+//                      FIREBASE OBJECTS
+// ─────────────────────────────────────────────────────────────
 FirebaseData   fbdo;
 FirebaseAuth   auth;
 FirebaseConfig fbConfig;
-bool fbReady = false;
+bool fbReady = false;   // Firebase ready flag
 
-// ──── NTP ─────────────────────────────────────────────────────
-const char* NTP_SERVER = "pool.ntp.org";
-const long  GMT_OFFSET = 5 * 3600 + 30 * 60;  // UTC+5:30 Colombo
 
-// ──── Debounce (prevents spam writes) ─────────────────────────
-unsigned long lastTapA = 0;
-unsigned long lastTapB = 0;
-const unsigned long TAP_COOLDOWN_MS = 2000;
+// ─────────────────────────────────────────────────────────────
+//                      TIME (NTP)
+// ─────────────────────────────────────────────────────────────
+const char* NTP_SERVER = "pool.ntp.org";   // Internet time server
 
-// ──── Helpers ─────────────────────────────────────────────────
+// Configure Sri Lanka timezone (UTC +5:30) = 19800 seconds
+void setupTime() {
+  configTime(19800, 0, NTP_SERVER);
+  // Wait for initial sync
+  delay(2000);
+}
+
+
+// ─────────────────────────────────────────────────────────────
+//                      WORKER CARD MAPPING
+// ─────────────────────────────────────────────────────────────
+struct CardMapping {
+  const char* uid;          // RFID UID
+  const char* workerId;     // Worker ID
+  const char* workerName;   // Worker Name
+  const char* role;         // Worker Role
+};
+
+// Add your RFID cards here
+const CardMapping CARDS[] = {
+  { "51:2D:A9:02", "W-01", "Kumuditha", "Site Supervisor" },
+};
+
+const int CARD_COUNT = sizeof(CARDS) / sizeof(CARDS[0]);
+
+
+// ─────────────────────────────────────────────────────────────
+//                      DEBOUNCE
+// ─────────────────────────────────────────────────────────────
+unsigned long lastTapA = 0;                 // Last scan time Zone A
+unsigned long lastTapB = 0;                 // Last scan time Zone B
+const unsigned long TAP_COOLDOWN_MS = 2000; // 2 seconds delay
+
+
+// ─────────────────────────────────────────────────────────────
+//                      HELPER FUNCTIONS
+// ─────────────────────────────────────────────────────────────
+
+// Convert RFID UID to readable string (XX:XX:XX:XX)
 String uidToString(MFRC522 &rfid) {
   String s = "";
   for (byte i = 0; i < rfid.uid.size; i++) {
@@ -104,6 +117,7 @@ String uidToString(MFRC522 &rfid) {
   return s;
 }
 
+// Find worker based on UID
 const CardMapping* lookupCard(const String &uid) {
   for (int i = 0; i < CARD_COUNT; i++) {
     if (uid == CARDS[i].uid) return &CARDS[i];
@@ -111,156 +125,159 @@ const CardMapping* lookupCard(const String &uid) {
   return nullptr;
 }
 
-void lcdLine(int row, const String &msg) {
-  lcd.setCursor(0, row);
-  lcd.print("                "); // clear 16 chars
-  lcd.setCursor(0, row);
-  lcd.print(msg.substring(0, 16));
+// Get readable time (YYYY-MM-DD HH:MM:SS)
+String getReadableTime() {
+  struct tm timeinfo;
+  if (!getLocalTime(&timeinfo)) return "TIME_FAIL";
+
+  char buffer[25];
+  strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", &timeinfo);
+  return String(buffer);
 }
 
-// NTP epoch ms, fallback to millis if NTP not ready
-unsigned long getTimestampMs() {
-  struct tm ti;
-  if (!getLocalTime(&ti)) return millis();
-  time_t epoch = mktime(&ti);
-  if (epoch < 100000) return millis();
-  return (unsigned long)epoch * 1000UL;
+// Get epoch time in milliseconds
+unsigned long getEpochMs() {
+  struct tm timeinfo;
+  if (!getLocalTime(&timeinfo)) return millis();
+  time_t now = mktime(&timeinfo);
+  return (unsigned long)now * 1000UL;
 }
 
-// ──── Firebase: write zone → /Workers  +  push → /ZonesHistory ─
+// Print message to LCD line
+void lcdLine(int row, String msg) {
+  lcd.setCursor(0, row);
+  lcd.print("                ");     // Clear row
+  lcd.setCursor(0, row);
+  lcd.print(msg.substring(0, 16)); // Print max 16 chars
+}
+
+
+// ─────────────────────────────────────────────────────────────
+//                      FIREBASE WRITE FUNCTION
+// ─────────────────────────────────────────────────────────────
 void pushZoneEvent(const char* workerId, const char* workerName,
-                   const char* role,     const char* zone,
+                   const char* role, const char* zone,
                    const String &uid) {
+
   if (!fbReady || !Firebase.ready()) return;
 
-  String workerPath = "/Workers/";
-  workerPath += workerId;
+  String workerPath = "/Workers/" + String(workerId);
 
-  // Timestamp for this zone event
-  unsigned long ts = getTimestampMs();
+  String readableTime = getReadableTime();   // Human time
+  unsigned long epochMs = getEpochMs();      // Epoch time
 
-  // Worker profile (written on every tap)
-  // NOTE: We do NOT write riskLevel here, helmet node owns that value.
+  // Update worker current data
   Firebase.RTDB.setString(&fbdo, (workerPath + "/currentZone").c_str(), zone);
-  Firebase.RTDB.setString(&fbdo, (workerPath + "/name").c_str(),        workerName);
-  Firebase.RTDB.setString(&fbdo, (workerPath + "/id").c_str(),          workerId);
-  Firebase.RTDB.setString(&fbdo, (workerPath + "/role").c_str(),        role);
-  Firebase.RTDB.setInt   (&fbdo, (workerPath + "/lastUpdate").c_str(),  (int)ts);
+  Firebase.RTDB.setString(&fbdo, (workerPath + "/name").c_str(), workerName);
+  Firebase.RTDB.setString(&fbdo, (workerPath + "/role").c_str(), role);
+  Firebase.RTDB.setString(&fbdo, (workerPath + "/lastUpdate").c_str(), readableTime);
+  Firebase.RTDB.setInt(&fbdo, (workerPath + "/lastUpdateEpoch").c_str(), epochMs);
 
-  // Zone history event
+  // Create history JSON object
   FirebaseJson json;
-  json.set("zone",       zone);
-  json.set("uid",        uid.c_str());
-  json.set("workerId",   workerId);
+  json.set("zone", zone);
+  json.set("uid", uid);
+  json.set("workerId", workerId);
   json.set("workerName", workerName);
-  json.set("ts",         (int)ts);
+  json.set("time", readableTime);
+  json.set("ts", epochMs);
 
-  String histPath = "/ZonesHistory/";
-  histPath += workerId;
+  String historyPath = "/ZonesHistory/" + String(workerId);
 
-  if (!Firebase.RTDB.pushJSON(&fbdo, histPath.c_str(), &json)) {
-    Serial.print("[FB] ZonesHistory push error: ");
-    Serial.println(fbdo.errorReason());
-  } else {
-    Serial.printf("[FB] %s (%s) -> %s @ %lu\n", workerId, workerName, zone, ts);
-  }
+  // Push new history record
+  Firebase.RTDB.pushJSON(&fbdo, historyPath.c_str(), &json);
 }
 
-// ──── Handle a detected card ──────────────────────────────────
-void handleCard(MFRC522 &rfid, const char* zoneName) {
-  String uid = uidToString(rfid);
-  Serial.printf("[%s] UID: %s\n", zoneName, uid.c_str());
 
+// ─────────────────────────────────────────────────────────────
+//                      HANDLE RFID CARD
+// ─────────────────────────────────────────────────────────────
+void handleCard(MFRC522 &rfid, const char* zoneName) {
+
+  String uid = uidToString(rfid);
   const CardMapping* card = lookupCard(uid);
+
   if (card) {
-    lcdLine(0, String("Zone: ") + zoneName);
+    lcdLine(0, "Zone: " + String(zoneName));
     lcdLine(1, card->workerName);
+
+    // Save zone event to Firebase
     pushZoneEvent(card->workerId, card->workerName, card->role, zoneName, uid);
   } else {
-    // Unknown card — just show UID
-    lcdLine(0, String("Zone: ") + zoneName);
-    lcdLine(1, "UID:" + uid.substring(uid.length() > 11 ? uid.length() - 11 : 0));
-    Serial.println("  (Unknown card — add UID to CARDS table)");
+    lcdLine(0, "Unknown Card");
+    lcdLine(1, uid);
   }
 
-  delay(150);
+  delay(200);
 }
 
-// ──── setup ───────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────
+//                      SETUP
+// ─────────────────────────────────────────────────────────────
 void setup() {
+
   Serial.begin(115200);
-  delay(200);
 
-  // LCD
+  // LCD start
   Wire.begin(21, 22);
-  lcd.begin(16, 2);     // ✅ FIX for your library
+  lcd.begin(16, 2);
   lcd.backlight();
-  lcdLine(0, "Starting...");
-  lcdLine(1, "");
 
-  // SPI + RFID
+  // RFID start
   SPI.begin(18, 19, 23);
-  pinMode(SS_A, OUTPUT); digitalWrite(SS_A, HIGH);
-  pinMode(SS_B, OUTPUT); digitalWrite(SS_B, HIGH);
-  delay(50);
-  rfidA.PCD_Init(); delay(50);
-  rfidB.PCD_Init(); delay(50);
-  Serial.println("RFID readers ready.");
+  rfidA.PCD_Init();
+  rfidB.PCD_Init();
 
-  // WiFi
-  lcdLine(0, "WiFi...");
+  // Connect WiFi
+  lcdLine(0, "Connecting WiFi");
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  int tries = 0;
-  while (WiFi.status() != WL_CONNECTED && tries++ < 20) {
+
+  while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
   }
 
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("\nWiFi OK: " + WiFi.localIP().toString());
-    lcdLine(0, "WiFi OK");
-    configTime(GMT_OFFSET, 0, NTP_SERVER);
+  lcdLine(0, "WiFi Connected");
 
-    // Wait for NTP sync — up to 20 seconds (critical for correct timestamps)
-    lcdLine(0, "NTP syncing...");
-    time_t nowT = time(nullptr);
-    int ttry = 0;
-    while (nowT < 1577836800L && ttry++ < 40) { // 1577836800 = Jan 1 2020
-      delay(500);
-      nowT = time(nullptr);
-      Serial.print(".");
-    }
-    if (nowT >= 1577836800L) {
-      Serial.println("\nNTP OK: epoch=" + String((long)nowT));
-      lcdLine(0, "NTP OK");
-    } else {
-      Serial.println("\nNTP FAILED — timestamps will be wrong!");
-      lcdLine(0, "NTP FAIL");
-    }
-  } else {
-    Serial.println("\nWiFi FAILED — offline mode");
-    lcdLine(0, "WiFi FAIL");
+  // Setup NTP time
+  setupTime();
+
+  // Wait up to 20 seconds for time sync
+  time_t nowT = time(nullptr);
+  int tries = 0;
+
+  while (nowT < 1577836800L && tries++ < 40) {
+    delay(500);
+    nowT = time(nullptr);
   }
 
-  // Firebase
-  fbConfig.api_key      = FIREBASE_API_KEY;
+  if (nowT < 1577836800L)
+    lcdLine(1, "NTP Failed");
+  else
+    lcdLine(1, "Time Synced");
+
+  // Firebase init
+  fbConfig.api_key = FIREBASE_API_KEY;
   fbConfig.database_url = FIREBASE_DATABASE_URL;
-  auth.user.email       = FIREBASE_USER_EMAIL;
-  auth.user.password    = FIREBASE_USER_PASSWORD;
-  fbConfig.token_status_callback = tokenStatusCallback;
+  auth.user.email = FIREBASE_USER_EMAIL;
+  auth.user.password = FIREBASE_USER_PASSWORD;
 
   Firebase.begin(&fbConfig, &auth);
   Firebase.reconnectWiFi(true);
   fbReady = true;
 
-  lcdLine(0, "RFID Zone Ready");
-  lcdLine(1, "Scan card...");
-  Serial.println("Zone tracker ready.");
+  lcdLine(0, "RFID Ready");
+  lcdLine(1, "Scan Card...");
 }
 
-// ──── loop ────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────
+//                      LOOP
+// ─────────────────────────────────────────────────────────────
 void loop() {
-  // Zone A
+
+  // Zone A reader
   if (rfidA.PICC_IsNewCardPresent() && rfidA.PICC_ReadCardSerial()) {
     if (millis() - lastTapA > TAP_COOLDOWN_MS) {
       lastTapA = millis();
@@ -270,7 +287,7 @@ void loop() {
     rfidA.PCD_StopCrypto1();
   }
 
-  // Zone B
+  // Zone B reader
   if (rfidB.PICC_IsNewCardPresent() && rfidB.PICC_ReadCardSerial()) {
     if (millis() - lastTapB > TAP_COOLDOWN_MS) {
       lastTapB = millis();
