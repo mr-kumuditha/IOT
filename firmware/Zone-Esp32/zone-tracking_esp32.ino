@@ -67,30 +67,12 @@ bool fbReady = false;   // Firebase ready flag
 // ─────────────────────────────────────────────────────────────
 const char* NTP_SERVER = "pool.ntp.org";   // Internet time server
 
-// Configure Sri Lanka timezone (UTC +5:30) = 19800 seconds
+// Configure Sri Lanka timezone (UTC +5:30)
 void setupTime() {
-  configTime(19800, 0, NTP_SERVER);
-  // Wait for initial sync
-  delay(2000);
+  configTime(0, 0, NTP_SERVER);     // Connect to NTP
+  setenv("TZ", "LKT-5:30", 1);      // Sri Lanka timezone
+  tzset();                          // Apply timezone
 }
-
-
-// ─────────────────────────────────────────────────────────────
-//                      WORKER CARD MAPPING
-// ─────────────────────────────────────────────────────────────
-struct CardMapping {
-  const char* uid;          // RFID UID
-  const char* workerId;     // Worker ID
-  const char* workerName;   // Worker Name
-  const char* role;         // Worker Role
-};
-
-// Add your RFID cards here
-const CardMapping CARDS[] = {
-  { "51:2D:A9:02", "W-01", "Kumuditha", "Site Supervisor" },
-};
-
-const int CARD_COUNT = sizeof(CARDS) / sizeof(CARDS[0]);
 
 
 // ─────────────────────────────────────────────────────────────
@@ -115,14 +97,6 @@ String uidToString(MFRC522 &rfid) {
   }
   s.toUpperCase();
   return s;
-}
-
-// Find worker based on UID
-const CardMapping* lookupCard(const String &uid) {
-  for (int i = 0; i < CARD_COUNT; i++) {
-    if (uid == CARDS[i].uid) return &CARDS[i];
-  }
-  return nullptr;
 }
 
 // Get readable time (YYYY-MM-DD HH:MM:SS)
@@ -195,20 +169,50 @@ void pushZoneEvent(const char* workerId, const char* workerName,
 void handleCard(MFRC522 &rfid, const char* zoneName) {
 
   String uid = uidToString(rfid);
-  const CardMapping* card = lookupCard(uid);
-
-  if (card) {
-    lcdLine(0, "Zone: " + String(zoneName));
-    lcdLine(1, card->workerName);
-
-    // Save zone event to Firebase
-    pushZoneEvent(card->workerId, card->workerName, card->role, zoneName, uid);
-  } else {
-    lcdLine(0, "Unknown Card");
+  
+  if (!fbReady || !Firebase.ready()) {
+    lcdLine(0, "WiFi/FB Offline");
     lcdLine(1, uid);
+    delay(1000);
+    return;
   }
 
-  delay(200);
+  lcdLine(0, "Checking Cloud..");
+  lcdLine(1, uid);
+
+  // 1. Check if UID exists in Firebase /Cards/{uid}
+  String cardPath = "/Cards/" + uid;
+  if (Firebase.RTDB.getJSON(&fbdo, cardPath.c_str())) {
+    
+    FirebaseJson &json = fbdo.jsonObject();
+    FirebaseJsonData jsonData;
+    
+    // Check if workerId exists inside the JSON
+    json.get(jsonData, "workerId");
+    if (jsonData.success) {
+      String workerId = jsonData.stringValue;
+      
+      json.get(jsonData, "workerName");
+      String workerName = jsonData.success ? jsonData.stringValue : "Unknown Worker";
+      
+      json.get(jsonData, "role");
+      String role = jsonData.success ? jsonData.stringValue : "Unknown Role";
+
+      // 2. We found a mapped worker! Update LCD & push event
+      lcdLine(0, "Zone: " + String(zoneName));
+      lcdLine(1, workerName);
+
+      pushZoneEvent(workerId.c_str(), workerName.c_str(), role.c_str(), zoneName, uid);
+      
+      delay(200);
+      return;
+    }
+  }
+
+  // 3. Card not mapped in Firebase
+  lcdLine(0, "Unregistered! ");
+  lcdLine(1, uid);
+  delay(1000);
 }
 
 
