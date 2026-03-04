@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
     Box, Typography, Card, Table, TableBody, TableCell, TableContainer,
     TableHead, TableRow, Button, IconButton, Dialog, DialogTitle,
-    DialogContent, DialogActions, TextField, Tooltip, Avatar,
+    DialogContent, DialogActions, TextField, Tooltip, Avatar, MenuItem,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
@@ -17,21 +17,38 @@ export const CardRegistryPage: React.FC = () => {
 
     const [addOpen, setAddOpen] = useState(false);
     const [uid, setUid] = useState('');
-    const [workerId, setWorkerId] = useState('');
     const [workerName, setWorkerName] = useState('');
-    const [role, setRole] = useState('');
+    const [role, setRole] = useState('Miner');
     const [saving, setSaving] = useState(false);
 
+    // Auto-generate next Worker ID (e.g. W-01, W-02)
+    const getNextWorkerId = () => {
+        if (cards.length === 0) return 'W-01';
+        const ids = cards.map(c => {
+            const num = parseInt(c.workerId.replace('W-', ''), 10);
+            return isNaN(num) ? 0 : num;
+        });
+        const maxId = Math.max(...ids);
+        return `W-${(maxId + 1).toString().padStart(2, '0')}`;
+    };
+
+    const handleOpenAdd = () => {
+        setUid('');
+        setWorkerName('');
+        setRole('Miner');
+        setAddOpen(true);
+    };
+
     const handleSave = async () => {
-        if (!uid || !workerId || !workerName) return;
+        if (!uid || !workerName) return;
         setSaving(true);
         try {
-            await linkCardToWorker(uid, workerId, workerName, role);
+            const newWorkerId = getNextWorkerId();
+            await linkCardToWorker(uid, newWorkerId, workerName, role);
             setAddOpen(false);
             setUid('');
-            setWorkerId('');
             setWorkerName('');
-            setRole('');
+            setRole('Miner');
         } finally {
             setSaving(false);
         }
@@ -52,7 +69,7 @@ export const CardRegistryPage: React.FC = () => {
                 <Button
                     variant="contained"
                     startIcon={<AddIcon />}
-                    onClick={() => setAddOpen(true)}
+                    onClick={handleOpenAdd}
                     sx={{ px: 3, borderRadius: 2, fontWeight: 700 }}
                 >
                     Register Worker
@@ -119,17 +136,18 @@ export const CardRegistryPage: React.FC = () => {
                             fullWidth size="small"
                         />
                         <TextField
-                            label="Worker ID (e.g. W-01)"
-                            value={workerId}
-                            onChange={e => setWorkerId(e.target.value)}
-                            fullWidth size="small"
-                        />
-                        <TextField
+                            select
                             label="Role"
                             value={role}
                             onChange={e => setRole(e.target.value)}
                             fullWidth size="small"
-                        />
+                        >
+                            <MenuItem value="Miner">Miner</MenuItem>
+                            <MenuItem value="Site Supervisor">Site Supervisor</MenuItem>
+                            <MenuItem value="Engineer">Engineer</MenuItem>
+                            <MenuItem value="Safety Officer">Safety Officer</MenuItem>
+                            <MenuItem value="Vehicle Operator">Vehicle Operator</MenuItem>
+                        </TextField>
                         <TextField
                             label="RFID Card UID (e.g. 51:2D:A9:02)"
                             value={uid}
@@ -144,7 +162,7 @@ export const CardRegistryPage: React.FC = () => {
                     <Button
                         onClick={handleSave}
                         variant="contained"
-                        disabled={saving || !uid || !workerId || !workerName}
+                        disabled={saving || !uid || !workerName}
                         startIcon={<SaveIcon />}
                     >
                         {saving ? 'Saving...' : 'Save Mapping'}
