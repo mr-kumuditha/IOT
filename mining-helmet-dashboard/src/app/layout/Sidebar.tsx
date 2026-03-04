@@ -19,6 +19,7 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import ShieldIcon from '@mui/icons-material/Shield';
 import MonitorHeartIcon from '@mui/icons-material/MonitorHeart';
 import FmdGoodIcon from '@mui/icons-material/FmdGood';
+import BadgeIcon from '@mui/icons-material/Badge';
 
 interface SidebarProps {
     open: boolean;
@@ -33,6 +34,7 @@ const menuItems = [
     { text: 'Incidents', icon: <WarningAmberIcon />, path: '/incidents' },
     { text: 'Monitor', icon: <MonitorHeartIcon />, path: '/monitor' },
     { text: 'Zone Tracking', icon: <FmdGoodIcon />, path: '/zones' },
+    { text: 'Worker Registry', icon: <BadgeIcon />, path: '/registry' },
     { text: 'Settings', icon: <SettingsIcon />, path: '/settings' },
 ];
 

@@ -6,6 +6,7 @@ import { WorkersPage } from '../views/Workers/WorkersPage';
 import { WorkerDetailsPage } from '../views/WorkerDetails/WorkerDetailsPage';
 import { IncidentsPage } from '../views/Incidents/IncidentsPage';
 import { SettingsPage } from '../views/Settings/SettingsPage';
+import { CardRegistryPage } from '../views/Settings/CardRegistryPage';
 import { MonitorPage } from '../views/Monitor/MonitorPage';
 import { ZonePage } from '../views/Zone/ZonePage';
 
@@ -20,6 +21,7 @@ export const AppRoutes: React.FC = () => {
                 <Route path="incidents" element={<IncidentsPage />} />
                 <Route path="monitor" element={<MonitorPage />} />
                 <Route path="zones" element={<ZonePage />} />
+                <Route path="registry" element={<CardRegistryPage />} />
                 <Route path="settings" element={<SettingsPage />} />
                 <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Route>
