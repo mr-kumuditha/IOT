@@ -18,6 +18,6 @@ export interface Worker {
     role: string;
     currentZone: string;
     riskLevel: WorkerRiskLevel;
-    lastUpdate: number;
+    lastUpdate?: number;
     lastSensors?: SensorData;
 }

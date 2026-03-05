@@ -35,7 +35,7 @@ export const WorkerDetailsPage: React.FC = () => {
     useEffect(() => {
         if (worker?.lastUpdate) {
             const interval = setInterval(() => {
-                setLastUpdated(formatTimeAgo(worker.lastUpdate));
+                setLastUpdated(formatTimeAgo(worker.lastUpdate!));
             }, 1000);
             return () => clearInterval(interval);
         }

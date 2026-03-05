@@ -6,9 +6,21 @@ import type { Worker } from '../models/worker';
 // Timestamps smaller than this are Arduino millis() fallback, not real epoch
 const MIN_VALID_EPOCH_MS = 1_577_836_800_000; // Jan 1 2020 00:00 UTC
 
-const normalizeTimestamp = (ts?: number): number | undefined => {
-    if (!ts || ts < MIN_VALID_EPOCH_MS) return undefined;
-    return ts;
+const normalizeTimestamp = (ts?: string | number): number | undefined => {
+    if (!ts) return undefined;
+
+    if (typeof ts === 'string') {
+        const d = new Date(ts.replace(' ', 'T') + '+05:30');
+        const timeMs = d.getTime();
+        return isNaN(timeMs) ? undefined : timeMs;
+    }
+
+    if (typeof ts === 'number') {
+        if (ts < MIN_VALID_EPOCH_MS) return undefined;
+        return ts;
+    }
+
+    return undefined;
 };
 
 export const useWorkers = () => {
