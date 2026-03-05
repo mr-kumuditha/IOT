@@ -102,7 +102,7 @@ export const WorkerDetailsPage: React.FC = () => {
                         Assign the physical helmet to a worker — their profile will show live sensor data
                     </Typography>
                 </Box>
-                <Tooltip title="Select which worker is currently wearing the physical helmet">
+                <Tooltip title="Select which worker is currently wearing the physical helmet" placement="top" disableInteractive>
                     <TextField
                         select
                         size="small"
