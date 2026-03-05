@@ -1,5 +1,5 @@
 // ============================================================
-//  SMART MINING HELMET (ESP32) 
+//  SMART MINING HELMET 
 //  ✔ 1 second live updates to /live/W-01
 //  ✔ Keep ONLY last 100 telemetry records (auto delete oldest)
 //  ✔ Optional telemetry push every 15 sec
