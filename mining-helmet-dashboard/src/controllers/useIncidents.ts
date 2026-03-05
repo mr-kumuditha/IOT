@@ -11,10 +11,23 @@ export const useIncidents = () => {
         const unsubscribe = onValue(incidentsRef, (snapshot) => {
             if (snapshot.exists()) {
                 const data = snapshot.val();
-                const incidentsArray: Incident[] = Object.keys(data).map((key) => ({
-                    ...data[key],
-                    id: key,
-                }));
+                const incidentsArray: Incident[] = Object.keys(data).map((key) => {
+                    const incident = data[key];
+                    let finalTime = incident.time;
+
+                    // If incident.time is a string, parse it to epoch ms (Colombo tz)
+                    if (typeof finalTime === 'string') {
+                        const d = new Date(finalTime.replace(' ', 'T') + '+05:30');
+                        const parsed = d.getTime();
+                        if (!isNaN(parsed)) finalTime = parsed;
+                    }
+
+                    return {
+                        ...incident,
+                        id: key,
+                        time: finalTime,
+                    };
+                });
                 // Sort descending by time
                 incidentsArray.sort((a, b) => b.time - a.time);
                 setIncidents(incidentsArray);

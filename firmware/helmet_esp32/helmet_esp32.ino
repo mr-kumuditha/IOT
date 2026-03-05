@@ -294,8 +294,8 @@ void writeLiveToFirebase(int gas, float temp, float hum, bool fall, const String
   live.set("workerId",  WORKER_ID);
   live.set("workerName",WORKER_NAME);
 
-  if (!Firebase.RTDB.setJSON(&fbdo, ("/live/" + String(WORKER_ID)).c_str(), &live)) {
-    Serial.print("[FB] live error: ");
+  if (!Firebase.RTDB.setJSONAsync(&fbdo, ("/live/" + String(WORKER_ID)).c_str(), &live)) {
+    Serial.print("[FB] live error (Async): ");
     Serial.println(fbdo.errorReason());
   }
 }

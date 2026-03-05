@@ -40,16 +40,8 @@ export const useRiskPropagation = () => {
             if (!snap.exists()) return;
             const data = snap.val() as LiveSensorData;
 
-            const gasLevel = getGasLevel(data.gas ?? 0);
-            const tempLevel = getTempLevel(data.temp ?? 0);
-            const humidityLevel = getHumidityLevel(data.humidity ?? 50);
-            const motionLevel = getMotionLevel(data.motion);
-
-            // Overall = worst of all sensors
-            const levels = [gasLevel, tempLevel, humidityLevel, motionLevel];
-            const overall =
-                levels.includes('DANGER') ? 'DANGER' :
-                    levels.includes('WARNING') ? 'WARNING' : 'SAFE';
+            // Native ESP32 risk level assessment
+            const overall = data.riskLevel || 'SAFE';
 
             const assignedId = assignedRef.current;
 
@@ -61,6 +53,11 @@ export const useRiskPropagation = () => {
                 const ts = data.timestamp ?? Date.now();
                 const workerName = workerNameRef.current || assignedId;
                 const zone = workerZoneRef.current || 'Unknown Zone';
+
+                const gasLevel = getGasLevel(data.gas ?? 0);
+                const tempLevel = getTempLevel(data.temp ?? 0);
+                const humidityLevel = getHumidityLevel(data.humidity ?? 50);
+                const motionLevel = getMotionLevel(data.motion);
 
                 // Determine which sensor triggered it
                 let type: string = 'GAS';
