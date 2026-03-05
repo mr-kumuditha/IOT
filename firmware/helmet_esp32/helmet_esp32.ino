@@ -184,8 +184,26 @@ void buzzerTick() {
 }
 
 // ============================================================
-//  TIME (NTP) — epoch ms
+//  TIME (NTP) — Sri Lanka (UTC+5:30)
 // ============================================================
+String getReadableTime() {
+  struct tm timeinfo;
+  if (!getLocalTime(&timeinfo)) return "TIME_FAIL";
+
+  char buffer[25];
+  strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", &timeinfo);
+  return String(buffer);
+}
+
+String getLastUpdateString() {
+  struct tm timeinfo;
+  if (!getLocalTime(&timeinfo)) return "TIME_FAIL";
+
+  char buffer[40];
+  strftime(buffer, sizeof(buffer), "Last Update : %d %b %Y | %H:%M:%S", &timeinfo);
+  return String(buffer);
+}
+
 unsigned long nowEpochMs() {
   time_t now = time(nullptr);
   if (now < 100000) return 0;
@@ -259,7 +277,15 @@ void writeLiveToFirebase(int gas, float temp, float hum, bool fall, const String
   if (tsMs == 0) tsMs = millis();
 
   FirebaseJson live;
-  live.set("timestamp", (double)tsMs);
+  String readableTs = getReadableTime();
+  String lastUpdateStr = getLastUpdateString();
+  
+  if (readableTs == "TIME_FAIL") {
+      live.set("timestamp", (double)tsMs);
+  } else {
+      live.set("timestamp", readableTs);
+      live.set("lastUpdate", lastUpdateStr);
+  }
   live.set("gas",       gas);
   live.set("temp",      temp);
   live.set("humidity",  hum);
@@ -434,6 +460,8 @@ void setup() {
     lcdLine(2, ip.c_str());
 
     configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+    setenv("TZ", "LKT-5:30", 1);
+    tzset();
     time_t nowT = time(nullptr);
     int tries = 0;
     while (nowT < 100000 && tries < 30) {
