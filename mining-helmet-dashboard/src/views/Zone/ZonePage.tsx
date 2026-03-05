@@ -112,12 +112,27 @@ const HistoryLog: React.FC<{ workerId: string; workerName: string }> = ({ worker
     const { events, loading } = useZoneHistory(workerId, 20);
     const theme = useTheme();
 
-    const fmtTime = (ts: number) =>
-        new Intl.DateTimeFormat('en-GB', {
+    const fmtTime = (ev: { ts: number; time?: string }) => {
+        if (ev.time) {
+            try {
+                const [datePart, timePart] = ev.time.split(' ');
+                if (datePart && timePart) {
+                    const [, month, day] = datePart.split('-');
+                    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                    const monthStr = monthNames[parseInt(month, 10) - 1] || month;
+                    return `${day} ${monthStr} at ${timePart}`;
+                }
+            } catch (e) {
+                // fallback below
+            }
+            return ev.time;
+        }
+        return new Intl.DateTimeFormat('en-GB', {
             timeZone: 'Asia/Colombo',
             hour: '2-digit', minute: '2-digit', second: '2-digit',
             day: '2-digit', month: 'short',
-        }).format(new Date(ts));
+        }).format(new Date(ev.ts));
+    };
 
     return (
         <Box>
@@ -160,7 +175,7 @@ const HistoryLog: React.FC<{ workerId: string; workerName: string }> = ({ worker
                                             />
                                         </TableCell>
                                         <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
-                                            {fmtTime(ev.ts)}
+                                            {fmtTime(ev)}
                                         </TableCell>
                                         <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.75rem', color: 'text.secondary' }}>
                                             {ev.uid}

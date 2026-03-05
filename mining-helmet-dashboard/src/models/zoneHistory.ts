@@ -4,4 +4,5 @@ export interface ZoneHistoryEvent {
     workerId: string;
     workerName: string;
     uid: string;        // raw RFID UID
+    time?: string;      // Human-readable time from ESP
 }

@@ -9,9 +9,22 @@ interface ZoneTimelineProps {
     history: ZoneHistoryEvent[];
 }
 
-const formatTs = (ts: number | undefined) => {
-    if (!ts) return '—';
-    const d = new Date(ts);
+const formatTs = (ev: { ts: number; time?: string }) => {
+    if (ev.time) {
+        try {
+            const [datePart, timePart] = ev.time.split(' ');
+            if (datePart && timePart) {
+                const [, month, day] = datePart.split('-');
+                const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                const monthStr = monthNames[parseInt(month, 10) - 1] || month;
+                return `${day} ${monthStr} at ${timePart}`;
+            }
+        } catch (e) {
+            // fallback below
+        }
+        return ev.time;
+    }
+    const d = new Date(ev.ts);
     return d.toLocaleDateString('en-LK', { day: '2-digit', month: 'short' }) + ' ' +
         d.toLocaleTimeString('en-LK', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 };
@@ -66,7 +79,7 @@ export const ZoneTimeline: React.FC<ZoneTimelineProps> = ({ history }) => {
                                             sx={{ fontWeight: 700, mb: 0.5 }}
                                         />
                                         <Typography variant="caption" color="text.secondary" display="block">
-                                            {formatTs(event.ts)}
+                                            {formatTs(event)}
                                         </Typography>
                                         {event.uid && (
                                             <Typography variant="caption" color="text.disabled" sx={{ fontFamily: 'monospace', fontSize: '0.6rem' }}>

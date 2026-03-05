@@ -9,6 +9,7 @@ export interface ZoneEvent {
     workerId: string;
     workerName: string;
     ts: number;
+    time?: string;
 }
 
 export const useZoneHistory = (workerId: string, limit = 20) => {
