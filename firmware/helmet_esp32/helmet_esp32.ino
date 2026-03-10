@@ -584,16 +584,7 @@ void loop() {
     cleanupTelemetryKeepLast100();
   }
 
-  // ---- LCD ----
-  char line0[21], line1[21];
-  snprintf(line0, sizeof(line0), "Gas:%4d W:%d E:%d", gasValue, GAS_WARN_TH, GAS_EMER_TH);
-  lcdLine(0, line0);
 
-  if (dhtOk) snprintf(line1, sizeof(line1), "Temp:%2.1fC Hum:%2.0f%%", temp, hum);
-  else       snprintf(line1, sizeof(line1), "DHT11 SENSOR ERROR ");
-  lcdLine(1, line1);
-
-  bool wifiOk = (WiFi.status() == WL_CONNECTED);
 
   // ---- Alerts ----
   if (emergencyMode) {
