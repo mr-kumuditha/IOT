@@ -3,6 +3,7 @@
 //  ✔ 1 second live updates to /live/W-01
 //  ✔ Keep ONLY last 100 telemetry records (auto delete oldest)
 //  ✔ Optional telemetry push every 15 sec
+//  ✔ Green LED (D13) = SAFE | Red LED (D12) = DANGER/WARNING
 // ============================================================
 
 // ================= WiFi =================
@@ -53,6 +54,8 @@
 #define MQ135_PIN     34
 #define BUZZER_PIN    25
 #define STOP_BUTTON   26
+#define LED_GREEN_PIN 13   // Green LED — SAFE indicator
+#define LED_RED_PIN   12   // Red LED   — DANGER/WARNING indicator
 
 // ============================================================
 //  LCD (20x4)
@@ -180,6 +183,29 @@ void buzzerTick() {
     buzStep++;
 
     if (buzPattern != BUZ_EMER && buzStep >= maxSteps) stopBuzzer();
+  }
+}
+
+// ============================================================
+//  LED INDICATORS
+//  Green (D13) = SAFE   |   Red (D12) = WARNING or DANGER
+// ============================================================
+void setLedSafe() {
+  digitalWrite(LED_GREEN_PIN, HIGH);  // Green ON
+  digitalWrite(LED_RED_PIN,   LOW);   // Red OFF
+}
+
+void setLedDanger() {
+  digitalWrite(LED_GREEN_PIN, LOW);   // Green OFF
+  digitalWrite(LED_RED_PIN,   HIGH);  // Red ON
+}
+
+void updateLeds(const String &riskLevel) {
+  if (riskLevel == "SAFE") {
+    setLedSafe();
+  } else {
+    // WARNING or DANGER → Red LED on
+    setLedDanger();
   }
 }
 
@@ -387,6 +413,7 @@ int getTelemetryCount() {
 
   return (int)count;
 }
+
 void cleanupTelemetryKeepLast100() {
   if (!Firebase.ready()) return;
 
@@ -425,9 +452,15 @@ void setup() {
   lcd.backlight();
   lcd.clear();
 
-  pinMode(BUZZER_PIN, OUTPUT);
+  pinMode(BUZZER_PIN,    OUTPUT);
   buzzerOff();
-  pinMode(STOP_BUTTON, INPUT_PULLUP);
+  pinMode(STOP_BUTTON,   INPUT_PULLUP);
+  pinMode(LED_GREEN_PIN, OUTPUT);   // Green LED — SAFE
+  pinMode(LED_RED_PIN,   OUTPUT);   // Red LED   — DANGER/WARNING
+
+  // Default: both LEDs off at startup
+  digitalWrite(LED_GREEN_PIN, LOW);
+  digitalWrite(LED_RED_PIN,   LOW);
 
   dht.begin();
 
@@ -566,6 +599,15 @@ void loop() {
   // ---- Risk ----
   String riskLevel = computeRiskLevel(gasValue, dhtOk ? temp : 0, dhtOk ? hum : 0, fallDetected);
 
+  // ---- Update LEDs based on risk level ----
+  // Green (D13) = SAFE | Red (D12) = WARNING or DANGER
+  // Emergency SOS always forces Red LED on
+  if (emergencyMode) {
+    setLedDanger();
+  } else {
+    updateLeds(riskLevel);
+  }
+
   // ---- 1s LIVE update ----
   if (firebaseReady && (millis() - lastLiveMs >= LIVE_UPDATE_MS)) {
     lastLiveMs = millis();
@@ -584,7 +626,16 @@ void loop() {
     cleanupTelemetryKeepLast100();
   }
 
+  // ---- LCD ----
+  char line0[21], line1[21];
+  snprintf(line0, sizeof(line0), "Gas:%4d W:%d E:%d", gasValue, GAS_WARN_TH, GAS_EMER_TH);
+  lcdLine(0, line0);
 
+  if (dhtOk) snprintf(line1, sizeof(line1), "Temp:%2.1fC Hum:%2.0f%%", temp, hum);
+  else       snprintf(line1, sizeof(line1), "DHT11 SENSOR ERROR ");
+  lcdLine(1, line1);
+
+  bool wifiOk = (WiFi.status() == WL_CONNECTED);
 
   // ---- Alerts ----
   if (emergencyMode) {
@@ -633,4 +684,3 @@ void loop() {
   buzzerTick();
   delay(100);
 }
- 
