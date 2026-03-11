@@ -186,28 +186,6 @@ void buzzerTick() {
   }
 }
 
-// ============================================================
-//  LED INDICATORS
-//  Green (D13) = SAFE   |   Red (D12) = WARNING or DANGER
-// ============================================================
-void setLedSafe() {
-  digitalWrite(LED_GREEN_PIN, HIGH);  // Green ON
-  digitalWrite(LED_RED_PIN,   LOW);   // Red OFF
-}
-
-void setLedDanger() {
-  digitalWrite(LED_GREEN_PIN, LOW);   // Green OFF
-  digitalWrite(LED_RED_PIN,   HIGH);  // Red ON
-}
-
-void updateLeds(const String &riskLevel) {
-  if (riskLevel == "SAFE") {
-    setLedSafe();
-  } else {
-    // WARNING or DANGER → Red LED on
-    setLedDanger();
-  }
-}
 
 // ============================================================
 //  TIME (NTP) — Sri Lanka (UTC+5:30)
