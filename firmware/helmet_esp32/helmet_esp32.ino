@@ -236,21 +236,6 @@ unsigned long nowEpochMs() {
   return (unsigned long)now * 1000UL;
 }
 
-// ============================================================
-//  RISK LEVEL
-// ============================================================
-String computeRiskLevel(int gas, float temp, float hum, bool fall) {
-  if (fall)                 return "DANGER";
-  if (gas >= GAS_EMER_TH)   return "DANGER";
-  if (temp > TEMP_EMER_TH)  return "DANGER";
-  if (hum > HUM_EMER_TH)    return "DANGER";
-
-  if (gas >= GAS_WARN_TH)   return "WARNING";
-  if (temp > TEMP_WARN_TH)  return "WARNING";
-  if (hum > HUM_WARN_TH)    return "WARNING";
-
-  return "SAFE";
-}
 
 // ============================================================
 //  FIREBASE: write static profile once
