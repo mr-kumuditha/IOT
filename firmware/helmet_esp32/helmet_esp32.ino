@@ -119,7 +119,72 @@ unsigned long lastLiveMs     = 0;
 unsigned long lastTeleMs     = 0;
 unsigned long lastCleanupMs  = 0;
 
+// ============================================================
+//  LCD HELPER
+// ============================================================
+void lcdLine(int row, const char* text) {
+  lcd.setCursor(0, row);
+  lcd.print(text);
+  int len = strlen(text);
+  for (int i = len; i < 20; i++) lcd.print(" ");
+}
 
+// ============================================================
+//  BUZZER (ACTIVE-LOW) + NON-BLOCKING PATTERNS
+// ============================================================
+void buzzerOn()  { digitalWrite(BUZZER_PIN, LOW); }
+void buzzerOff() { digitalWrite(BUZZER_PIN, HIGH); }
+
+#define BUZ_NONE     0
+#define BUZ_GAS_WARN 1
+#define BUZ_ENV_WARN 2
+#define BUZ_FALL     3
+#define BUZ_EMER     4
+
+int buzPattern = BUZ_NONE;
+unsigned long buzLastMs = 0;
+int buzStep = 0;
+bool buzStateOn = false;
+
+void startBuzzer(int p) {
+  if (buzPattern != p) {
+    buzPattern = p;
+    buzLastMs = 0;
+    buzStep = 0;
+    buzStateOn = false;
+    buzzerOff();
+  }
+}
+void stopBuzzer() { buzPattern = BUZ_NONE; buzzerOff(); }
+
+void buzzerTick() {
+  if (buzPattern == BUZ_NONE) return;
+
+  unsigned long now = millis();
+  if (buzLastMs == 0) buzLastMs = now;
+
+  int onMs = 0, offMs = 0, maxSteps = 0;
+
+  switch (buzPattern) {
+    case BUZ_GAS_WARN: onMs = 200; offMs = 200; maxSteps = 6; break;
+    case BUZ_ENV_WARN: onMs = 700; offMs = 500; maxSteps = 2; break;
+    case BUZ_FALL:     onMs = 100; offMs = 100; maxSteps = 12; break;
+    case BUZ_EMER:     onMs = 80;  offMs = 80;  maxSteps = 999999; break;
+    default: break;
+  }
+
+  unsigned long interval = buzStateOn ? (unsigned long)onMs : (unsigned long)offMs;
+
+  if (now - buzLastMs >= interval) {
+    buzLastMs = now;
+    buzStateOn = !buzStateOn;
+
+    if (buzStateOn) buzzerOn(); else buzzerOff();
+    buzStep++;
+
+    if (buzPattern != BUZ_EMER && buzStep >= maxSteps) stopBuzzer();
+  }
+}
 
 // ============================================================
 //  LED INDICATORS
