@@ -209,32 +209,7 @@ void updateLeds(const String &riskLevel) {
   }
 }
 
-// ============================================================
-//  TIME (NTP) — Sri Lanka (UTC+5:30)
-// ============================================================
-String getReadableTime() {
-  struct tm timeinfo;
-  if (!getLocalTime(&timeinfo)) return "TIME_FAIL";
 
-  char buffer[25];
-  strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", &timeinfo);
-  return String(buffer);
-}
-
-String getLastUpdateString() {
-  struct tm timeinfo;
-  if (!getLocalTime(&timeinfo)) return "TIME_FAIL";
-
-  char buffer[40];
-  strftime(buffer, sizeof(buffer), "Last Update : %d %b %Y | %H:%M:%S", &timeinfo);
-  return String(buffer);
-}
-
-unsigned long nowEpochMs() {
-  time_t now = time(nullptr);
-  if (now < 100000) return 0;
-  return (unsigned long)now * 1000UL;
-}
 
 // ============================================================
 //  RISK LEVEL
