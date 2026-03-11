@@ -252,7 +252,46 @@ String computeRiskLevel(int gas, float temp, float hum, bool fall) {
   return "SAFE";
 }
 
+// ============================================================
+//  FIREBASE: write static profile once
+// ============================================================
+void writeProfileOnce() {
+  if (!Firebase.ready() || profileWritten) return;
 
+  String basePath = "/Workers/" + String(WORKER_ID);
+  bool ok1 = Firebase.RTDB.setString(&fbdo, (basePath + "/name").c_str(), WORKER_NAME);
+  bool ok2 = Firebase.RTDB.setString(&fbdo, (basePath + "/id").c_str(), WORKER_ID);
+
+  if (!ok1 || !ok2) {
+    Serial.print("[FB] Profile write error: ");
+    Serial.println(fbdo.errorReason());
+    return;
+  }
+  profileWritten = true;
+}
+
+// ============================================================
+//  SOS: /SOS/W-01
+// ============================================================
+void writeSosToFirebase() {
+  if (!Firebase.ready()) return;
+
+  unsigned long tsMs = nowEpochMs();
+  if (tsMs == 0) tsMs = millis();
+
+  FirebaseJson sosJson;
+  sosJson.set("active",     true);
+  sosJson.set("time",       (double)tsMs);
+  sosJson.set("workerName", WORKER_NAME);
+  sosJson.set("workerId",   WORKER_ID);
+
+  if (!Firebase.RTDB.setJSON(&fbdo, ("/SOS/" + String(WORKER_ID)).c_str(), &sosJson)) {
+    Serial.print("[FB] SOS error: ");
+    Serial.println(fbdo.errorReason());
+    return;
+  }
+  Serial.println("[FB] >>> SOS sent!");
+}
 
 // ============================================================
 //  LIVE UPDATE: /live/W-01  (dashboard listens here for realtime)
