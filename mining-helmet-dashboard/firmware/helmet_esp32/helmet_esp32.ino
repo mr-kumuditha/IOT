@@ -1,8 +1,9 @@
 // ============================================================
-//  SMART MINING HELMET (ESP32) 
+//  SMART MINING HELMET 
 //  ✔ 1 second live updates to /live/W-01
 //  ✔ Keep ONLY last 100 telemetry records (auto delete oldest)
 //  ✔ Optional telemetry push every 15 sec
+//  ✔ Green LED (D13) = SAFE | Red LED (D12) = DANGER/WARNING
 // ============================================================
 
 // ================= WiFi =================
@@ -53,6 +54,8 @@
 #define MQ135_PIN     34
 #define BUZZER_PIN    25
 #define STOP_BUTTON   26
+#define LED_GREEN_PIN 13   // Green LED — SAFE indicator
+#define LED_RED_PIN   12   // Red LED   — DANGER/WARNING indicator
 
 // ============================================================
 //  LCD (20x4)
@@ -184,8 +187,49 @@ void buzzerTick() {
 }
 
 // ============================================================
-//  TIME (NTP) — epoch ms
+//  LED INDICATORS
+//  Green (D13) = SAFE   |   Red (D12) = WARNING or DANGER
 // ============================================================
+void setLedSafe() {
+  digitalWrite(LED_GREEN_PIN, HIGH);  // Green ON
+  digitalWrite(LED_RED_PIN,   LOW);   // Red OFF
+}
+
+void setLedDanger() {
+  digitalWrite(LED_GREEN_PIN, LOW);   // Green OFF
+  digitalWrite(LED_RED_PIN,   HIGH);  // Red ON
+}
+
+void updateLeds(const String &riskLevel) {
+  if (riskLevel == "SAFE") {
+    setLedSafe();
+  } else {
+    // WARNING or DANGER → Red LED on
+    setLedDanger();
+  }
+}
+
+// ============================================================
+//  TIME (NTP) — Sri Lanka (UTC+5:30)
+// ============================================================
+String getReadableTime() {
+  struct tm timeinfo;
+  if (!getLocalTime(&timeinfo)) return "TIME_FAIL";
+
+  char buffer[25];
+  strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", &timeinfo);
+  return String(buffer);
+}
+
+String getLastUpdateString() {
+  struct tm timeinfo;
+  if (!getLocalTime(&timeinfo)) return "TIME_FAIL";
+
+  char buffer[40];
+  strftime(buffer, sizeof(buffer), "Last Update : %d %b %Y | %H:%M:%S", &timeinfo);
+  return String(buffer);
+}
+
 unsigned long nowEpochMs() {
   time_t now = time(nullptr);
   if (now < 100000) return 0;
@@ -259,7 +303,15 @@ void writeLiveToFirebase(int gas, float temp, float hum, bool fall, const String
   if (tsMs == 0) tsMs = millis();
 
   FirebaseJson live;
-  live.set("timestamp", (double)tsMs);
+  String readableTs = getReadableTime();
+  String lastUpdateStr = getLastUpdateString();
+  
+  if (readableTs == "TIME_FAIL") {
+      live.set("timestamp", (double)tsMs);
+  } else {
+      live.set("timestamp", readableTs);
+      live.set("lastUpdate", lastUpdateStr);
+  }
   live.set("gas",       gas);
   live.set("temp",      temp);
   live.set("humidity",  hum);
@@ -268,8 +320,8 @@ void writeLiveToFirebase(int gas, float temp, float hum, bool fall, const String
   live.set("workerId",  WORKER_ID);
   live.set("workerName",WORKER_NAME);
 
-  if (!Firebase.RTDB.setJSON(&fbdo, ("/live/" + String(WORKER_ID)).c_str(), &live)) {
-    Serial.print("[FB] live error: ");
+  if (!Firebase.RTDB.setJSONAsync(&fbdo, ("/live/" + String(WORKER_ID)).c_str(), &live)) {
+    Serial.print("[FB] live error (Async): ");
     Serial.println(fbdo.errorReason());
   }
 }
@@ -361,6 +413,7 @@ int getTelemetryCount() {
 
   return (int)count;
 }
+
 void cleanupTelemetryKeepLast100() {
   if (!Firebase.ready()) return;
 
@@ -399,9 +452,15 @@ void setup() {
   lcd.backlight();
   lcd.clear();
 
-  pinMode(BUZZER_PIN, OUTPUT);
+  pinMode(BUZZER_PIN,    OUTPUT);
   buzzerOff();
-  pinMode(STOP_BUTTON, INPUT_PULLUP);
+  pinMode(STOP_BUTTON,   INPUT_PULLUP);
+  pinMode(LED_GREEN_PIN, OUTPUT);   // Green LED — SAFE
+  pinMode(LED_RED_PIN,   OUTPUT);   // Red LED   — DANGER/WARNING
+
+  // Default: both LEDs off at startup
+  digitalWrite(LED_GREEN_PIN, LOW);
+  digitalWrite(LED_RED_PIN,   LOW);
 
   dht.begin();
 
@@ -434,6 +493,8 @@ void setup() {
     lcdLine(2, ip.c_str());
 
     configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+    setenv("TZ", "LKT-5:30", 1);
+    tzset();
     time_t nowT = time(nullptr);
     int tries = 0;
     while (nowT < 100000 && tries < 30) {
@@ -538,6 +599,15 @@ void loop() {
   // ---- Risk ----
   String riskLevel = computeRiskLevel(gasValue, dhtOk ? temp : 0, dhtOk ? hum : 0, fallDetected);
 
+  // ---- Update LEDs based on risk level ----
+  // Green (D13) = SAFE | Red (D12) = WARNING or DANGER
+  // Emergency SOS always forces Red LED on
+  if (emergencyMode) {
+    setLedDanger();
+  } else {
+    updateLeds(riskLevel);
+  }
+
   // ---- 1s LIVE update ----
   if (firebaseReady && (millis() - lastLiveMs >= LIVE_UPDATE_MS)) {
     lastLiveMs = millis();
@@ -613,4 +683,4 @@ void loop() {
 
   buzzerTick();
   delay(100);
-}@
+}
